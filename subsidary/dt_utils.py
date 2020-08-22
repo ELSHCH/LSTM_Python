@@ -10,6 +10,8 @@ import matplotlib.dates as mdates
 from keras.models import model_from_json
 import time
 import json
+#from matplotlib import rcParams
+
 #from subsidary.config import cfg
 plt.rc('text', usetex=True)
 
@@ -224,9 +226,38 @@ def joinStrings(string_e,num_str):
 ##print(len(X_f_mean))
 ##save_data(t_true,X_true,fileName)
 
-def plot_data(t_f,X_f,X_std,t_before_f,X_before_f,t_true,X_true,categories_f,categories_true,params):
-  print('X_f.shape',X_f.shape,X_true.shape)
-  nVar_f=np.size(X_f,1)
+def plot_data(t_f,X_f,X_std,t_true,X_true,categories_f,categories_true,params):
+  with open(params['file_summary_prediction']+".json", 'r') as f:
+    data=json.load(f)
+  f.close()
+  params['session_id']=data['Session ID']
+  t_data = data['Time start, [s]']
+  t_date=convert_sec_date(int(t_data[:-2]))
+  summary_text = 'Time start, [s] ='+ str(t_date) +' Parameter: ' +data['Parameter'] +' Units: '+ data['Units']+ '\n'\
+                  +' Horizon, hours= '+str(data['Prediction horizon, hours']) +\
+                 '  interp. points='+str(data['Number of points for interpolation '])+\
+                 '  Nr inputs ='+str(data['Number of inputs'])+'  Nr outputs ='+str(data['Number of outputs'])
+  labels2=['min','mean','max']
+  labels1=['Pred','Observ']
+  max_v=np.zeros(5)
+  min_v=np.zeros(5)
+  med_v=np.zeros(5)
+  max_v[0]=float(data['Maximum value LSTM'])
+  min_v[0]=float(data['Minimum value LSTM'])
+  med_v[0]=float(data['Mean value LSTM'])
+  max_v[1]=float(data['Maximum value LSTM EncodDecod'])
+  min_v[1]=float(data['Minimum value LSTM EncodDecod'])
+  med_v[1]=float(data['Mean value LSTM EncodDecod'])
+  max_v[2]=float(data['Maximum value LSTM EncodDecod CNN'])
+  min_v[2]=float(data['Minimum value LSTM EncodDecod CNN'])
+  med_v[2]=float(data['Mean value LSTM EncodDecod CNN'])
+  max_v[3]=float(data['Maximum value LSTM EncodDecod Conv'])
+  min_v[3]=float(data['Minimum value LSTM EncodDecod Conv'])
+  med_v[3]=float(data['Mean value LSTM EncodDecod Conv'])
+
+  x=[1.0, 2.0]
+  
+  nVar_f=X_f.shape[0]
   ind_joint_categories = []
   for k in range(len(categories_f)): 
    for i in range(len(categories_true)):
@@ -251,10 +282,16 @@ def plot_data(t_f,X_f,X_std,t_before_f,X_before_f,t_true,X_true,categories_f,cat
    for k in range(len(t_f)):
      for i in range(len(t_true)-1):
        if (t_true[i]<=t_f[k]) and (t_true[i+1]>t_f[k]):
-         rmse[s1,0]=abs(X_f[k,0]-X_true[i,ind_joint_categories[0]]) # calculate RMSE for available prediction
-         X_original[s1,0]=X_true[i,ind_joint_categories[0]] # create a copy of original time series 
+       #  rmse[s1,0]=abs(X_f[k,0]-X_true[i,ind_joint_categories[0]]) # calculate RMSE for available prediction
+       #  X_original[s1,0]=X_true[i,ind_joint_categories[0]] # create a copy of original time series
+         for s2 in range(params['num_models']):
+           rmse[s1,0]=abs(X_f[k,s2]-X_true[i,0]) # calculate RMSE for available prediction
+         X_original[s1,0]=X_true[i,0] # create a copy of original time series 
          time[s1]=t_f[k] # create a copy of time series
-         s1 = s1 + 1       
+         s1 = s1 + 1
+  max_v[4]=np.max(X_original[:,0])
+  min_v[4]=np.min(X_original[:,0])
+  med_v[4]=np.mean(X_original[:,0])       
 # Convert from seconds to datetime and to hours format ---------------------
   list_times_true = []
   list_times_f = []
@@ -271,40 +308,117 @@ def plot_data(t_f,X_f,X_std,t_before_f,X_before_f,t_true,X_true,categories_f,cat
    list_times_true.append(str_time)
   # print("dt_object =", str_time)   
 # Plot results -------------------------------------------------
-  fig, (ax1, ax2) = plt.subplots(2, sharex=True)
-  fig.suptitle('Predicted and original data')
-  if lengthT>0:
-   ax1.plot(time,X_original[:,0],label='Original data')
-  ax1.plot(t_f,X_f[:,0],label='Predicted data')
-  ax1.plot(t_before_f,X_before_f[:,0],label='Original data, Predictor sequence')
- # ax1.errorbar(t_f,X_f[:,0], yerr=X_std[:,ind_joint_categories[0]], label='both limits (default)')
-  ax1.legend(('Original data', 'Predicted data'),
-           loc='upper right')
-  ax1.set_ylabel(r'\bf{Oxygen, ml/l}', {'color': 'C0', 'fontsize': 10})
-  ax1.set_xlabel(r'\bf{Time}', {'color': 'C0', 'fontsize': 20})
+  fig = plt.figure()
+ # fig, ax1 = plt.subplots(params['num_models'],3,sharex=True, sharey=True)
+ # gs = fig.add_gridspec(1,params['num_models'], hspace=0)
+  #ax1 = gs.subplots(sharex=True, sharey=True)
+  fig.suptitle('Predicted versus observed data', fontsize=14, fontweight='bold')
+  fig.subplots_adjust(left=0.15, bottom=None, right=None, top=0.85, wspace=None, hspace=0)
+  models_collection =['LSTM','LSTM_EncodeDecode','LSTM_EncodeDecodeCNN','LSTM_EncodeDecodeConv']
   xticks = time[0:len(time):10]
-  degrees=60
+  degrees=40
   date_labels=[]
   tt=params['time_start']
   t_date1=str(tt[0:10])+"\t\t"
   t_date2=str(tt[11:19])
   for k in range(len(time)):
-    str_date = convert_sec_date(time[k])
+     str_date = convert_sec_date(time[k])
+     date_labels.append(str_date[0:22])
+  for i1 in range(params['num_models']):
+  #  ax1 = fig.add_subplot(4,1,i1+1)
+    ax1=plt.subplot2grid((4,10),(i1,0),colspan=5)
+    if lengthT>0:
+     plt.plot(time,X_original[:,0],label='Original data')
+    plt.plot(t_f,X_f[:,i1],label='Predicted data')
+  #  textstr='Here is text'
+    plt.gcf().text(0.2, 0.87, summary_text, fontsize=7)
+    plt.fill_between(t_f, X_f[:,i1] - X_std[:,i1], X_f[:,i1] + X_std[:,i1], alpha=0.2)
+ #   ax1[i1].plot(t_before_f,X_before_f,label='Original data, Predictor sequence')
+ #  ax1.errorbar(t_f,X_f[:,0], yerr=X_std[:,ind_joint_categories[0]], label='both limits (default)')
+  #  ax1[i1].errorbar(t_f,X_f[:,i1], yerr=X_std[:,i1],label='both limits (default)')
+    if i1 == 0:
+     plt.legend(('Observ.', 'Pred.'),
+           loc='lower right',prop={'size': 6})
+    plt.ylabel('Oxygen, ml/l', {'color': 'C0', 'fontsize': 10})
+    if i1 == params['num_models'] -1:
+     plt.xlabel('Time', {'color': 'C0', 'fontsize': 20})
+    if i1 == params['num_models']-1:
+     plt.xticks(time[0:len(time):10], date_labels[0:len(time):10], rotation=degrees)
+    # plt.xlabel(date_labels[0:len(time):10])
+    plt.tick_params(labelsize=6)
+    max_all=np.max(max_v)
+    min_all=np.min(min_v)
+    marg=0.25*abs(max_all-min_all) 
+    plt.ylim(min_all-marg,max_all+marg)
+    models_collection[i1]=models_collection[i1].replace('_',' ')
+    print(models_collection[i1],i1)
+    plt.text(time[5], np.max(X_f[:,i1]), str(models_collection[i1]))
+    ax2=plt.subplot2grid((4,10),(i1,6),colspan=2)
+    y=np.array([med_v[i1], med_v[4]])
+    yerr_min=np.array([min_v[i1], min_v[4]])#, [med_v[4]-min_v[4], max_v[4]-med_v[4]])
+    yerr_max=np.array([max_v[i1], max_v[4]])#,
+    bar_width=0.45
+    plt.bar(x, abs(yerr_max-y),bar_width,color=['blue','pink'],bottom=y) #=yerr, fmt='.k', ecolor='gray', lw=1)
+    plt.bar(x, abs(y-yerr_min), bar_width,color=['blue','pink'],bottom=yerr_min)
+    if i1 == params['num_models']-1:
+     plt.xticks(x, labels1)
+    # plt.xlabel(labels1, fontsize=6, rotation = 45)
+    plt.ylim(min_all-marg,max_all+marg)
+    plt.hlines(med_v[i1], x[0]-0.5, x[0]+0.5, colors='k', linestyles='solid')
+    plt.hlines(med_v[4], x[1]-0.5, x[1]+0.5, colors='k', linestyles='solid')
+    plt.text(x[0]-0.5, min_v[i1]-marg/2, labels2[0], fontsize=6)
+    plt.text(x[0]-0.5, med_v[i1]+marg/4, labels2[1], fontsize=6)
+    plt.text(x[0]-0.5, max_v[i1]+marg/2, labels2[2], fontsize=6)
+    plt.text(x[1]-0.5, min_v[4]-marg/2, labels2[0], fontsize=6)
+    plt.text(x[1]-0.5, med_v[4]+marg/4, labels2[1], fontsize=6)
+    plt.text(x[1]-0.5, max_v[4]+marg/2, labels2[2], fontsize=6)
+    plt.xlim(0,3)     
+  
+  json_file = open(params['file_summary_prediction']+".json", 'r')
+  loaded_model_json = json_file.read()
+  json_file.close()
+  
+ # ax2.plot(t_true,X_true[:,ind_joint_categories[0]],label='Full Time series')
+ #  textstr = '\n'.join((
+ #   r'Mean value= %5s' % (str(X_mean), ),
+ #   r'Max value= %5s' % (str(X_max), ),
+ #   r'Min value=%5s' % (str(X_min), ),
+ #   r'Start time = %s %s' % (t_date1,t_date2, ),
+ #   r'Horizon (hours)=%10s' % ( params['P_horizon_hours'])))
+ # ax1.text(0.05, 0.95, textstr, transform=ax1.transAxes, fontsize=9,
+ #       verticalalignment='top')
+ # ax2.legend()
+  #fig.tight_layout()
+  fig.show()
+  plt.savefig(params["dir_prediction"]+"/"+params['PredictionPlot']+".pdf",bbox_inches='tight',dpi=100)
+
+'''  fig = plt.figure()
+  fig.suptitle('Predicted and original data', fontsize=14, fontweight='bold')
+  ax1 = fig.add_subplot(111)
+  fig.subplots_adjust(top=0.65)
+#  rcParams['font.family'] = 'sans-serif'
+  fig.suptitle('Predicted and original data')
+  xticks = time[0:len(time):500]
+  degrees=60
+  date_labels=[]
+  tt=params['time_start']
+  t_date1=str(tt[0:10])+"\t\t"
+  t_date2=str(tt[11:19])
+  for k in range(len(t_true)):
+    str_date = convert_sec_date(t_true[k])
     date_labels.append(str_date[0:22])
-  plt.xticks(time[0:len(time):10], date_labels[0:len(time):10], rotation=degrees)
-  ax2.plot(t_true,X_true[:,ind_joint_categories[0]],label='Full Time series')
-  textstr = '\n'.join((
-    r'Mean value= %5s' % (str(X_mean), ),
-    r'Max value= %5s' % (str(X_max), ),
-    r'Min value=%5s' % (str(X_min), ),
-    r'Start time = %s %s' % (t_date1,t_date2, ),
-    r'Horizon (hours)=%10s' % ( params['P_horizon_hours'])))
-  ax1.text(0.05, 0.95, textstr, transform=ax1.transAxes, fontsize=9,
-        verticalalignment='top')
-  ax2.legend()
+ # plt.xticks(t_true[0:len(t_true):500], date_labels[0:len(t_true):500], rotation=degrees)
+  ax1.plot(t_true,X_true[:,ind_joint_categories[0]],label='Full Time series')
+  plt.xticks(t_true[0:len(t_true):1000], date_labels[0:len(t_true):1000], rotation=degrees)
+ # ax1.text(0.05, 0.95, textstr, transform=ax1.transAxes, fontsize=9,
+    #    verticalalignment='top')
+  ax1.set_ylabel('Oxygen, ml/l', {'color': 'C0', 'fontsize': 10})
+  ax1.set_xlabel('Time', {'color': 'C0', 'fontsize': 10})
+  ax1.set(xlim=(t_true[0], t_true[len(t_true)-1]), \
+          ylim=(np.min(X_true[:,ind_joint_categories[0]]), np.max(X_true[:,ind_joint_categories[0]])))
   fig.tight_layout()
   fig.show()
-  plt.savefig(params["dir_prediction"]+"/"+params['file_prediction']+".pdf",bbox_inches='tight',dpi=100) 
+  plt.savefig(params["dir_prediction"]+"/"+"OriginalData.pdf",bbox_inches='tight',dpi=100) '''
 
 def convert_sec_date(time_secs):
    dt_object = datetime.fromtimestamp(time_secs)
@@ -316,6 +430,7 @@ def prepare_data(data_X_f,data_T_f,params):
 #  interval
    len_data=np.size(data_X_f,1)
    n_Var_f=np.size(data_X_f,0)
+   print('len_data',len_data,n_Var_f)
 # Standartize data
    mu = np.zeros(n_Var_f,dtype=np.float32)
    sig = np.zeros(n_Var_f,dtype=np.float32)
@@ -347,11 +462,7 @@ def prepare_data(data_X_f,data_T_f,params):
    sample_size_f=int(P_horizon_sec_f/deltaT)
 # Assign data for training
 # Entire data for training
-   if params["choice_training"] == 'FULL':
-     length_train = m_points-1
-# Interval is used for training
-   elif params["choice_training"] == "PART":
-     length_train = params['length_window']-1
+   length_train = m_points-1
    XTrain_f = np.zeros((n_Var_f,length_train),dtype=np.float32)
    YTrain_f = np.zeros((n_Var_f,length_train),dtype=np.float32)                          
    XTrain_f[si][:] = X_downscale_f[si][0:length_train]
@@ -374,26 +485,29 @@ def load_network_json(model_name,params):
   loaded_model.load_weights(params["dir_network"]+"/"+model_name+".h5")
   return loaded_model
 
-def find_name_network(network_names_KF,network_names,shift_n,params):
+def find_name_network(network_names_KF_Q,network_names_KF_R,network_names,shift_n,params):
   network_files_indir = []
   for (dirpath, dirnames, filenames) in walk(params["dir_network"]):
     network_files_indir.extend(filenames)
     break 
   network_exists= [0 for i in range(params['num_shifts'])]
-  network_KF_exists= [0 for i in range(params['num_shifts'])]
+  network_KF_Q_exists= [0 for i in range(params['num_shifts'])]
+  network_KF_R_exists= [0 for i in range(params['num_shifts'])]
   for i in range(shift_n.shape[0]):
     for j in range(len(network_files_indir)):
-      print(network_files_indir[j],network_names_KF[i]) 
-      if network_names_KF[i] + ".json" == network_files_indir[j]:
-        network_KF_exists[i]=1
+      if network_names_KF_Q[i] + ".json" == network_files_indir[j]:
+        network_KF_Q_exists[i]=1
+      if network_names_KF_R[i] + ".json" == network_files_indir[j]:
+        network_KF_R_exists[i]=1  
       if network_names[i] + ".json"== network_files_indir[j]:
         network_exists[i]=1
-  return network_exists,network_KF_exists
+  return network_exists,network_KF_Q_exists,network_KF_R_exists
 
 def set_network_name(shift_S,params):
   network_name = params['file_network']+"_"+str(shift_S)
-  network_name_KF = params['file_network_KF']+"_"+str(shift_S)
-  return network_name_KF,network_name
+  network_name_KF_Q = params['file_network_KF_Q']+"_"+str(shift_S)
+  network_name_KF_R = params['file_network_KF_R']+"_"+str(shift_S)
+  return network_name_KF_Q,network_name_KF_R,network_name
 
 '''def run_model(params,network_exists,network_KF_exists,shift_n,...):
   for r1 in range(shift_n):
@@ -409,40 +523,60 @@ def set_network_name(shift_S,params):
          tracker = multistep_lstm_kf(params)'''
     
    
-def save_prediction(name_parameter,prediction_interval,t_stamp_prediction,X_prediction, \
+def save_prediction(n_var_f,t_stamp_prediction,X_prediction, X_std, \
                     t_stamp_history,X_history,params):
-  dataset_prediction = np.zeros([t_stamp_prediction.shape[0],2])
-  dataset_history = np.arange(2*t_stamp_history.shape[0]).reshape(t_stamp_history.shape[0],2)
-  
-  for j in range(t_stamp_prediction.shape[0]):
+  dataset_prediction = np.zeros([t_stamp_prediction.shape[0],3])
+  dataset_history = np.zeros([t_stamp_history.shape[0],1+n_var_f])
+  for j in range(len(t_stamp_prediction)):
      dataset_prediction[j,0]=t_stamp_prediction[j]
-     dataset_prediction[j,1]=X_prediction[j]   
-  for j in range(t_stamp_history.shape[0]):
-     dataset_history[j][0]=t_stamp_history[j]
-     dataset_history[j][1]=X_history[j,0]
+     dataset_prediction[j,1]=X_prediction[j,0]
+     dataset_prediction[j,2]=X_std[j,0]
+  print('shape',X_history.shape,len(t_stamp_history))   
+  for j in range(len(t_stamp_history)):
+     dataset_history[j,0]=t_stamp_history[j]
+     for i1 in range(n_var_f):
+       dataset_history[j,1+i1]=X_history[j,i1]
   w = csv.writer(open(params["dir_prediction"]+"/"+params['file_output_history']+".csv", "w",newline=""))
+  connect_history=[]
+  for i1 in range(n_var_f):
+     connect_history.append(dataset_history[j,i1])
   for j in range(t_stamp_history.shape[0]):
-    w.writerow([dataset_history[j,0], dataset_history[j,1]])
+   connect_history=[dataset_history[j,0]]
+   for i1 in range(n_var_f-1):
+     connect_history.append(dataset_history[j,i1+1])
+   w.writerow(connect_history)
   w = csv.writer(open(params["dir_prediction"]+"/"+params['file_output_prediction']+".csv", "w",newline=""))
   for j in range(t_stamp_prediction.shape[0]):
-    w.writerow([dataset_prediction[j,0], dataset_prediction[j,1]])     
+    w.writerow([dataset_prediction[j,0], dataset_prediction[j,1], dataset_prediction[j,2]])     
  # dataset_prediction.to_csv("dir_prediction"]+"/"+params["file_output_prediction"] +".csv")
  # dataset_history.to_csv("dir_prediction"]+"/"+params["file_output_history"] +".csv")
 # Save mean , max and min predicted values of parameter in separate "csv" and "json" files
-  data_prediction_mean = np.mean(dataset_prediction[:][1],axis=0)
-  data_prediction_max = max(dataset_prediction[:][1])
-  data_prediction_min = min(dataset_prediction[:][1])
+
+def save_summary_prediction(name_parameter,prediction_interval,t_stamp_prediction, \
+                            data_prediction_mean, data_prediction_max, data_prediction_min,\
+                            data_max, data_min, data_mean, params):
+
+  
   dict = {'Time start, [s]' : str(t_stamp_prediction[0]), 'Parameter' : name_parameter, 'Units' : ' ml/l ', 'Prediction time' : prediction_interval, \
-          'Maximum value' : str(data_prediction_max), 'Minimum value' : str(data_prediction_min), 'Mean value' : str(data_prediction_mean)}
-  w = csv.writer(open(params["dir_prediction"]+"/"+params['file_summary_prediction']+".csv", "w",newline=""))
+          'Maximum value LSTM' : str(data_prediction_max[0]), 'Minimum value LSTM' : str(data_prediction_min[0]), 'Mean value LSTM' : str(data_prediction_mean[0]),\
+          'Maximum value LSTM EncodDecod' : str(data_prediction_max[1]), 'Minimum value LSTM EncodDecod' : str(data_prediction_min[1]), \
+          'Mean value LSTM EncodDecod' : str(data_prediction_mean[1]),\
+          'Maximum value LSTM EncodDecod CNN' : str(data_prediction_max[2]), 'Minimum value LSTM EncodDecod CNN' : str(data_prediction_min[2]), \
+          'Mean value LSTM EncodDecod CNN' : str(data_prediction_mean[2]),\
+          'Maximum value LSTM EncodDecod Conv' : str(data_prediction_max[3]), 'Minimum value LSTM EncodDecod Conv' : str(data_prediction_min[3]), \
+          'Mean value LSTM EncodDecod Conv' : str(data_prediction_mean[3]),\
+          'Maximum value Observ' : str(data_max), 'Minimum value Observ' : str(data_min), 'Mean value Observ' : str(data_mean),\
+           'Prediction horizon, hours': str(params['P_horizon_hours']), 'Number of points for interpolation ': str(params['n_points']), \
+          'Number of inputs': str(params['n_input']), 'Number of outputs': str(params['n_output']), 'Session ID': str(params['session_id'])}
+  w = csv.writer(open(params['file_summary_prediction']+".csv", "w",newline=""))
   for key, val in dict.items():
     w.writerow([key, val])
-  with open(params["dir_prediction"]+"/"+params['file_summary_prediction']+".json","w") as f:
+  with open(params['file_summary_prediction']+".json","w") as f:
      json.dump(dict,f)
-  f.close() 
-
+  f.close()  
+    
 def load_summary_from_csv(params):
-    f = open(params["dir_prediction"]+"/"+params['file_summary_prediction']+".csv",'r')
+    f = open(params['file_summary_prediction']+".csv",'r')
     csv_reader = csv.reader(f, delimiter=',')
     line_count = 0
     data ={}
@@ -452,7 +586,7 @@ def load_summary_from_csv(params):
     return data
    
 def load_summary_from_json(params):
-    f = open(params["dir_prediction"]+"/"+params['file_summary_prediction']+".json",'r')
+    f = open(params['file_summary_prediction']+".json",'r')
     data=f.read()
     f.close()    
     return eval(data)

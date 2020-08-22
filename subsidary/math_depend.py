@@ -18,7 +18,7 @@ def sample_covariance(X_var_f,n_var_f,n_observ_f):
 #    Output parameters: Q_covar - matrix of covariance of size (n_var_f X n_var_f)
 #-------------------------------------------------------------------------
   Q_covar=np.zeros((n_var_f,n_var_f),dtype=np.float32)
-  mean_X_var=np.zeros(n_var_f,dtype=np.float32)
+  mean_X_var=np.zeros([n_var_f])
   for k in range(n_var_f):    
       mean_X_var[k] = np.mean(X_var_f[:,k])  
       for i in range(n_var_f):    
@@ -56,7 +56,7 @@ def split_data_overlap_windows(X_data,t_data,n_var_f,n_observ_f,length_window,sh
        i=i+1    
   number_windows=i-1
   #print(X_data.shape[0],X_data.shape[1],n_var_f)
-  data_array_X_explain = np.zeros([number_windows,length_window,1])
+  data_array_X_explain = np.zeros([number_windows,length_window,n_var_f])
   data_array_X_response = np.zeros([number_windows,length_window])
   data_array_t= np.zeros([length_window,number_windows+1])
  # print(length_window,number_windows,np.size(data_array_t,0),np.size(data_array_t,1))
@@ -64,17 +64,17 @@ def split_data_overlap_windows(X_data,t_data,n_var_f,n_observ_f,length_window,sh
   for i in range(number_windows):
     #print(n_observ_f-1-i*length_window+i*shift_n-(1+n_observ_f-1-(i+1)*length_window+i*shift_n),length_window)
     for j in range(length_window):
-      for k in range(1):
+      for k in range(n_var_f):
       #  print(i,j,n_observ_f-1-(i+1)*length_window-j+(i+1)*shift_n,n_observ_f-1-i*length_window-j+i*shift_n)
         data_array_X_explain[number_windows-i-1,length_window-j-1,k] = \
-           X_data[n_observ_f-1-(i+1)*length_window-j+(i+1)*shift_n,0]                                             
+           X_data[n_observ_f-1-(i+1)*length_window-j+(i+1)*shift_n,k]                                             
         data_array_X_response[number_windows-i-1,length_window-j-1] = \
           X_data[n_observ_f-1-i*length_window-j+i*shift_n,0]
      ## print(i,j,np.size(data_array_t,0),np.size(data_array_t,1))
         data_array_t[length_window-j-1,number_windows-i-1] = \
-           t_data[n_observ_f-1-i*length_window-j+i*shift_n]        
+           t_data[n_observ_f-1-i*length_window-j+i*shift_n]      
   # Find the window preceeding prediction interval of interest. This window should contain start of prediction             
-  for i in range(number_windows):
+  for i in range(number_windows+1):
   #  print(t_data[ind_f_start],data_array_t[0,i],data_array_t[length_window-1,i])
     if t_data[ind_f_start]>data_array_t[0,i] and t_data[ind_f_start]<data_array_t[length_window-1,i]:
        ind_window_f=i
@@ -118,7 +118,7 @@ def split_data_overlap_windows(X_data,t_data,n_var_f,n_observ_f,length_window,sh
   #ax1.scatter(t_data,t_data,color='g',label='Original data')
   #ax2.scatter(t_data[:],X_data[:][0],label='Original data')  
   #plt.show()
-  print(data_array_X_explain.shape)
+#  print(data_array_X_explain.shape)
   return data_array_X_explain, data_array_X_response, data_array_t, number_windows, ind_window_f
 
 def get_median_ensemble(X_ensemble_f,T_ensemble_f,params):
@@ -133,47 +133,58 @@ def get_median_ensemble(X_ensemble_f,T_ensemble_f,params):
   for j in range(length_t-1):
     t1.update({j+1: t_last[j+1]})
  # for x, y in thisdict.items():
+  X_collect={str(0):list()}
+  X_median_f={str(0):list()}
+  X_std_f={str(0):list()}
+  for j in range(length_t):
+    X_collect.update({str(j):[]})
+  for j in range(length_t):
+    X_median_f.update({str(j):[]})
+    X_std_f.update({str(j):[]})  
   for si in range(params['num_shifts']):
    t2=list(T_ensemble_f[:,si])
    lst3 = [key for key in t1 if t1[key] in t2]
-   X_collect={str(0):list()}
-   X_median_f={str(0):list()}
-   X_std_f={str(0):list()}
-   for j in range(length_t):
-     X_collect.update({str(j):[]})
-   for j in range(length_t):
-     X_median_f.update({str(j):[]})
-     X_std_f.update({str(j):[]})  
    for j in range(length_t):   
      for k in range(len(lst3)): 
       if lst3[k]==j:
         X_values=X_collect[str(j)]
         X_values.append(X_ensemble_f[lst3[k],si])
         X_collect[str(j)]=X_values
-   for j in range(length_t):
-     X_values=X_collect[str(j)]
-     X_values.append(X_ensemble_f[j,si])
-     X_collect[str(j)]=X_values
+   #for j in range(length_t):
+   #  X_values=X_collect[str(j)]
+   #  X_values.append(X_ensemble_f[j,si])
+   #  X_collect[str(j)]=X_values 
    for j in range(length_t):  
      X_median_f[str(j)]=np.median(X_collect[str(j)])
      X_std_f[str(j)]=np.std(X_collect[str(j)])
      X_median[j] = X_median_f[str(j)]
      X_std[j] = X_std_f[str(j)]
-   return X_median, X_std
+  return X_median, X_std
 
 def un_std(mean_data,sig_data,max_data,X_f_median_f,X_f_std_f,X_true_f,X_downscale_f,ind_responses):
 # Unstandartize the data
   nVar_res=X_true_f.shape[1]
   n_observ=X_f_median_f.shape[0]
-  X_downscale=np.zeros([nVar_res,n_observ])
+  X_downscale=np.zeros([np.size(X_downscale_f,0),nVar_res])
   X_true=np.zeros([np.size(X_true_f,0),np.size(X_true_f,1)])
   X_median=np.zeros([n_observ,nVar_res])
   X_std=np.zeros([n_observ,nVar_res])
   for si in range(np.size(X_true_f,1)):
     for j in range(np.size(X_true_f,0)):
       X_true[j,si]=X_true_f[j,si]*max_data[si]+mean_data[si]
-    for j in range(n_observ):     
-      X_downscale[si,j]=X_downscale[si,j]*max_data[si]+mean_data[si]
+    for j in range(np.size(X_downscale_f,0)):     
+      X_downscale[j,si]=X_downscale_f[j,si]*max_data[si]+mean_data[si]  
+    for j in range(n_observ):
       X_median[j,si]=X_f_median_f[j]*max_data[si]+mean_data[si]
       X_std[j]=X_f_std_f[j]*max_data[si]+mean_data[si] 
-  return X_median,X_std,X_true,X_downscale 
+  return X_median,X_std,X_true,X_downscale
+
+def check_exceed_threshold(X_data_f,upper_threshold_f,lower_threshold_f,percent_out):
+  exceed_out = 0
+  n_observ = np.size(X_data_f,0)
+  n_var = np.size(X_data_f,1)
+  num_points =[ 1 for x in range(n_observ) if X_data_f[x,0]>=upper_threshold_f]
+  fr = np.sum(num_points)
+  if fr > percent_out:
+    exceed_out = 1
+  return exceed_signal

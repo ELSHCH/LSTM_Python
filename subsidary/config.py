@@ -2,13 +2,10 @@ import os
 import platform
 import getpass
 import locale
-from datetime import datetime
 
 #locale.setlocale(locale.LC_NUMERIC, 'en_US.UTF-8')
 
-def get_params():
-   global params
-   params={}
+def get_params(params):
    
 #Set network hyperparameters 
    params['nlayer']= 3 # number of layers for recurrent neural network f - model
@@ -25,10 +22,10 @@ def get_params():
    params['K_inp']=48
    params['n_input']= None#  number of input variables
    params['length_window'] = None # length of trained sequence
-   params['num_shifts'] = 1 # number of shifts of overlapped trained sequences
    params['num_hidden']=20
-   params['n_epochs']=20
+   params['n_epochs']=30
    params['batch_size']=10
+   params['num_models'] = 4
 
    params['per_process_gpu_memory_fraction']=1
 
@@ -47,54 +44,38 @@ def get_params():
 
    # Read parameters from prediction file
    fl = open(params['data_input'],"r")          
-   params['Algorithm_Scheme'] = fl.readline().rstrip()
-   params['choice_training'] = fl.readline().rstrip()
    params['time_start'] = fl.readline().rstrip()
    params['P_horizon_hours']= int(fl.readline())
    params['n_points'] = int(fl.readline())   
    params['nVar'] = int(fl.readline())
    line_file_name = fl.readline()
    params['file_data'] =line_file_name.rstrip()
-   fl.close()
-   params['file_summary_prediction'] = "summary_prediction"
-   params['file_output_prediction'] = "output_prediction"
-   params['file_output_history'] = "output_history"
-
+   params['file_summary_prediction'] = 'Summary_prediction'
+   params['file_output_prediction'] = 'Output_prediction_'+str(params['session_id'])
+   params['file_output_history'] = 'Output_history_'+str(params['session_id'])
+   params['PredictionPlot'] = 'PredictionPlot_'+str(params['session_id'])
 
  #  params['file_prediction']=params['']+"/files/logs/"+params["model"]+"_"+params["rn_id"]+"_"+str(params['run_mode'])+"_"+utils.get_time()+".txt"
    return params
 def update_parameters(number_var_in,number_var_out,train_int_length,params):
-   # Update parameters for prediction 
+   # Update parameters for prediction
+   params['file_output_prediction'] = 'Output_prediction_'+str(params['session_id'])
    params['length_window']= train_int_length
    params['n_output']= number_var_out
    params['n_input']= number_var_in
-   params['file_prediction']= params['file_data'] + "_"+ params['Algorithm_Scheme']+"_" + \
-                              params['choice_training'] + "_" + \
-                              str(params['P_horizon_hours'])+"_"+str(params['n_points'])+"_"+ \
-                              str(params['n_input']) + "_" + str(params['n_output'])
-   params['file_summary_prediction'] = "summary_prediction"+ "_"+ params['Algorithm_Scheme']+"_" + \
-                              params['choice_training'] + "_" + \
-                              str(params['P_horizon_hours'])+"_"+str(params['n_points'])+"_"+ \
-                              str(params['n_input']) + "_" + str(params['n_output'])
-   params['file_output_prediction'] = "output_prediction"+ "_"+ params['Algorithm_Scheme']+"_" + \
-                              params['choice_training'] + "_" + \
-                              str(params['P_horizon_hours'])+"_"+str(params['n_points'])+"_"+ \
-                              str(params['n_input']) + "_" + str(params['n_output'])
-   params['file_output_history'] = "output_history"+ "_"+ params['Algorithm_Scheme']+"_" + \
-                              params['choice_training'] + "_" + \
-                              str(params['P_horizon_hours'])+"_"+str(params['n_points'])+"_"+ \
-                              str(params['n_input']) + "_" + str(params['n_output'])
-   
-   params['file_network']= params['Algorithm_Scheme'] + "_" + \
-                              params['choice_training'] + "_" + str(params['P_horizon_hours']) + "_" +\
+   params['file_network']= params['LSTM_type']+ "_" + \
+                              str(params['P_horizon_hours']) + "_" +\
                               str(params['n_points'])+"_"+ \
                               str(params['n_input']) + "_" + str(params['n_output']) + "_" + \
                               str(params['num_hidden'])                                   
-   params['file_network_KF']= params['Algorithm_Scheme']+"_QRF"+  \
-                              params['choice_training'] + "_" + \
+   params['file_network_KF_Q']=params['LSTM_type']+"_QF"+ "_" +\
                               str(params['P_horizon_hours'])+"_"+str(params['n_points'])+"_"+ \
                               str(params['n_input']) + "_" + str(params['n_output']) + "_" + \
-                              str(params['num_hidden'])                                  
+                              str(params['num_hidden'])
+   params['file_network_KF_R']=params['LSTM_type']+"_RF"+ "_" +\
+                              str(params['P_horizon_hours'])+"_"+str(params['n_points'])+"_"+ \
+                              str(params['n_input']) + "_" + str(params['n_output']) + "_" + \
+                              str(params['num_hidden'])    
    return params
  
    
